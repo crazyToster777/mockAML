@@ -31,16 +31,16 @@ class AMLVerifier:
         kafka_partition: int | None = None,
     ) -> None:
         with db_session(self._cfg) as session:
-            repo = TransactionRepository(session)
-            repo.save_transaction(transaction, kafka_offset=kafka_offset, kafka_partition=kafka_partition)
+                repo = TransactionRepository(session)
+                repo.save_transaction(transaction, kafka_offset=kafka_offset, kafka_partition=kafka_partition)
 
-            recent = repo.get_recent_transactions(
-                transaction.account_id,
-                window_seconds=self._cfg.velocity_window_seconds,
-            )
+                recent = repo.get_recent_transactions(
+                    transaction.account_id,
+                    window_seconds=self._cfg.velocity_window_seconds,
+                )
 
-            result = self._rule_engine.evaluate(transaction, recent)
-            repo.save_aml_result(result)
+                result = self._rule_engine.evaluate(transaction, recent)
+                repo.save_aml_result(result)
 
         logger.info(
             "transaction_verified",

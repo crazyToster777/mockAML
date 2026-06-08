@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { font-family: 'DM Sans', sans-serif; }
+h1, h2, h3, .font-display { font-family: 'Syne', sans-serif; }
+.font-mono, code { font-family: 'IBM Plex Mono', monospace; }

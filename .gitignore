@@ -31,5 +31,12 @@ htmlcov/
 # Logs
 *.log
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Claude Code local settings
+.claude/settings.local.json
+
 # OS
 .DS_Store

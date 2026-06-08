@@ -1,29 +1,47 @@
+import logging
 from datetime import datetime, timezone
 
 import structlog
 from confluent_kafka import Consumer as ConfluentConsumer
 from confluent_kafka import KafkaError, KafkaException, Producer as ConfluentProducer, TopicPartition
+from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 from src.config import Settings, settings as default_settings
 from src.models.transaction import Transaction
 
 logger = structlog.get_logger(__name__)
+_stdlib_logger = logging.getLogger(__name__)
+
+
+@retry(
+    stop=stop_after_attempt(10),
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    before=before_log(_stdlib_logger, logging.WARNING),
+    reraise=True,
+)
+def _create_confluent_consumer(cfg: Settings, group_id: str) -> ConfluentConsumer:
+    consumer = ConfluentConsumer({
+        "bootstrap.servers": cfg.kafka_bootstrap_servers,
+        "group.id": group_id,
+        "auto.offset.reset": cfg.kafka_auto_offset_reset,
+        "enable.auto.commit": False,
+        "max.poll.interval.ms": 300_000,
+    })
+    consumer.list_topics(timeout=5)
+    return consumer
 
 
 class TransactionConsumer:
     def __init__(self, cfg: Settings = default_settings, group_id: str | None = None):
         self._cfg = cfg
-        self._consumer = ConfluentConsumer({
-            "bootstrap.servers": cfg.kafka_bootstrap_servers,
-            "group.id": group_id or cfg.kafka_consumer_group,
-            "auto.offset.reset": cfg.kafka_auto_offset_reset,
-            "enable.auto.commit": False,
-            "max.poll.interval.ms": 300_000,
-        })
+        effective_group = group_id or cfg.kafka_consumer_group
+        self._consumer = _create_confluent_consumer(cfg, effective_group)
         self._dlq_producer = ConfluentProducer({
             "bootstrap.servers": cfg.kafka_bootstrap_servers,
             "acks": "all",
         })
+        from src.kafka_client.serialization import make_serializer
+        _, self._deserialize = make_serializer(cfg)
 
     def subscribe(self, topics: list[str] | None = None) -> None:
         self._consumer.subscribe(topics or [self._cfg.kafka_transactions_topic])
@@ -37,7 +55,7 @@ class TransactionConsumer:
                 return None
             raise KafkaException(msg.error())
         try:
-            txn = Transaction.from_kafka_payload(msg.value())
+            txn = self._deserialize(msg.value())
             self._consumer.commit(message=msg, asynchronous=False)
             return txn
         except Exception as exc:

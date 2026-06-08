@@ -1,12 +1,24 @@
+import logging
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+import structlog
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 from src.config import Settings, settings as default_settings
 
+logger = structlog.get_logger(__name__)
+_stdlib_logger = logging.getLogger(__name__)
 
+
+@retry(
+    stop=stop_after_attempt(10),
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    before=before_log(_stdlib_logger, logging.WARNING),
+    reraise=True,
+)
 def create_session_factory(cfg: Settings = default_settings) -> sessionmaker[Session]:
     engine = create_engine(
         cfg.postgres_dsn,
@@ -15,7 +27,8 @@ def create_session_factory(cfg: Settings = default_settings) -> sessionmaker[Ses
         pool_pre_ping=True,
         echo=False,
     )
-    # таблицы создаются только через: alembic upgrade head
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 

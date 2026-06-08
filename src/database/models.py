@@ -34,3 +34,12 @@ class AMLResultRecord(Base):
     amount_usd: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class BlacklistedAccount(Base):
+    __tablename__ = "blacklisted_accounts"
+
+    account_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(50), default="manual")

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     alert_webhook_url: str = "http://localhost:8888/alerts"
     alert_log_only: bool = True
 
+    schema_registry_url: str = ""  # пусто = Schema Registry отключён, используется JSON
+
+    health_port: int = 8080
+
     @property
     def postgres_dsn(self) -> str:
         return (

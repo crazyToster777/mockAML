@@ -14,6 +14,8 @@ from decimal import Decimal
 
 from src.aml.reconciliation import ReconciliationService
 from src.aml.verifier import AMLVerifier
+from src.config import settings
+from src.health import configure as configure_health, start_health_server
 from src.kafka_client.producer import TransactionProducer
 from src.models.transaction import Transaction, TransactionType
 
@@ -38,6 +40,20 @@ def cmd_produce(count: int) -> None:
 
 
 def cmd_verify(max_messages: int | None = None) -> None:
+    from sqlalchemy import text
+    from confluent_kafka import Producer as _KafkaProbe
+    from src.database.session import db_session
+
+    def _kafka_check() -> None:
+        probe = _KafkaProbe({"bootstrap.servers": settings.kafka_bootstrap_servers})
+        probe.list_topics(timeout=3)
+
+    def _db_check() -> None:
+        with db_session() as s:
+            s.execute(text("SELECT 1"))
+
+    configure_health(kafka_check=_kafka_check, db_check=_db_check)
+    start_health_server(port=settings.health_port)
     AMLVerifier().run(max_messages=max_messages)
 
 

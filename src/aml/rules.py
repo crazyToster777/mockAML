@@ -1,9 +1,14 @@
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+import structlog
+
 from src.models.transaction import AMLVerificationResult, RiskLevel, Transaction
+
+logger = structlog.get_logger(__name__)
 
 BLACKLISTED_ACCOUNTS: frozenset[str] = frozenset({
     "SANCTIONED001",
@@ -47,15 +52,48 @@ class AmountThresholdRule(AMLRule):
 
 
 class BlacklistRule(AMLRule):
-    """Blocks transactions to/from sanctioned accounts."""
+    """Blocks transactions to/from sanctioned accounts.
 
-    def __init__(self, blacklist: frozenset[str] = BLACKLISTED_ACCOUNTS):
-        self.blacklist = blacklist
+    Seed set (BLACKLISTED_ACCOUNTS) is always active. Additionally refreshes from
+    the blacklisted_accounts DB table every ttl_seconds (default 5 min).
+    On DB failure the stale cache is kept — the seed set ensures a hard floor.
+    """
+
+    def __init__(self, cfg=None, ttl_seconds: int = 300):
+        self._cfg = cfg
+        self._ttl = ttl_seconds
+        self._cache: frozenset[str] = BLACKLISTED_ACCOUNTS
+        self._cached_at: datetime | None = None
+        self._lock = threading.Lock()
+
+    def _get_blacklist(self) -> frozenset[str]:
+        now = datetime.now(timezone.utc)
+        if self._cached_at is not None and (now - self._cached_at).total_seconds() < self._ttl:
+            return self._cache
+        with self._lock:
+            if self._cached_at is not None and (now - self._cached_at).total_seconds() < self._ttl:
+                return self._cache
+            try:
+                from sqlalchemy import select
+
+                from src.database.models import BlacklistedAccount
+                from src.database.session import db_session
+                with db_session(self._cfg) as session:
+                    rows = session.execute(select(BlacklistedAccount.account_id)).scalars().all()
+                self._cache = BLACKLISTED_ACCOUNTS | frozenset(rows)
+                self._cached_at = now
+                logger.debug("blacklist_refreshed", total=len(self._cache))
+            except Exception as exc:
+                logger.warning("blacklist_refresh_failed", error=str(exc))
+                if self._cached_at is None:
+                    self._cached_at = now
+        return self._cache
 
     def evaluate(self, transaction: Transaction, recent_transactions: list[Transaction]) -> RuleResult:
+        blacklist = self._get_blacklist()
         hit = (
-            transaction.account_id in self.blacklist
-            or transaction.counterparty_account_id in self.blacklist
+            transaction.account_id in blacklist
+            or transaction.counterparty_account_id in blacklist
         )
         return RuleResult(
             triggered=hit,
@@ -128,7 +166,7 @@ class RuleEngine:
         c = cfg or default_settings
         return cls(rules=[
             AmountThresholdRule(threshold_usd=c.amount_threshold_usd),
-            BlacklistRule(),
+            BlacklistRule(cfg=c),
             VelocityRule(
                 max_transactions=c.velocity_max_transactions,
                 window_seconds=c.velocity_window_seconds,
