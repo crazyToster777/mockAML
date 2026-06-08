@@ -23,12 +23,17 @@ jobs:
       - name: Run tests
         run: pytest --alluredir=allure-results -q
 
+      - name: Install Allure CLI
+        if: always()
+        run: |
+          curl -sLo allure.tgz https://github.com/allure-framework/allure2/releases/download/2.29.0/allure-2.29.0.tgz
+          tar -xzf allure.tgz
+          sudo mv allure-2.29.0 /opt/allure
+          sudo ln -s /opt/allure/bin/allure /usr/local/bin/allure
+
       - name: Generate Allure report
         if: always()
-        uses: simple-elf/allure-report-action@v1
-        with:
-          allure_results: allure-results
-          allure_report: allure-report
+        run: allure generate allure-results -o allure-report --clean
 
       - name: Upload Allure report
         if: always()
