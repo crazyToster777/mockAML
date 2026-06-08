@@ -14,8 +14,9 @@ if config.config_file_name is not None:
 # подключаем наши ORM-модели для autogenerate
 target_metadata = Base.metadata
 
-# берём DSN из settings, а не из alembic.ini
-config.set_main_option("sqlalchemy.url", settings.postgres_dsn)
+# берём DSN из settings если URL не задан явно (тесты передают свой URL)
+if not config.get_main_option("sqlalchemy.url", None):
+    config.set_main_option("sqlalchemy.url", settings.postgres_dsn)
 
 
 def run_migrations_offline() -> None:

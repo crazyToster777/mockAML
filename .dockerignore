@@ -5,7 +5,33 @@ __pycache__
 .pytest_cache
 .mypy_cache
 .ruff_cache
+.coverage
+htmlcov
+
+# Secrets / local env
 .env
+.env.docker
+
+# Git
 .git
+.gitignore
+
+# Tests (not needed in production image)
+tests/
+requirements-test.txt
+allure-results/
+allure-report/
+
+# Docs / planning
 *.md
-allure-results
+TESTS_PLAN.md
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Claude Code
+.claude/

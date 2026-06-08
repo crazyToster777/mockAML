@@ -33,8 +33,8 @@ class BulkResponse(BaseModel):
 
 
 class SingleRequest(BaseModel):
-    account_id: str
-    counterparty_account_id: str
+    account_id: str = Field(min_length=6)
+    counterparty_account_id: str = Field(min_length=6)
     amount_usd: float = Field(gt=0)
     transaction_type: TransactionType
 
