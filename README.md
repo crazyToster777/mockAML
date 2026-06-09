@@ -54,7 +54,7 @@ cp .env.example .env
 make up
 ```
 
-Open http://localhost — dashboard is ready in ~30s while Kafka initializes.
+Open http://localhost:3000/ — dashboard is ready in ~30s while Kafka initializes.
 
 To produce test transactions:
 
